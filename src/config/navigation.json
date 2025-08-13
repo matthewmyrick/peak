@@ -1,0 +1,96 @@
+{
+  "navigation": [
+    {
+      "name": "Overview",
+      "items": []
+    },
+    {
+      "name": "Applications",
+      "items": []
+    },
+    {
+      "name": "Nodes",
+      "items": []
+    },
+    {
+      "name": "Workloads",
+      "items": [
+        "Overview",
+        "Pods",
+        "Deployments",
+        "DaemonSets",
+        "StatefulSets",
+        "ReplicaSets",
+        "ReplicationControllers",
+        "Jobs",
+        "CronJobs"
+      ]
+    },
+    {
+      "name": "Config",
+      "items": [
+        "ConfigMaps",
+        "Secrets",
+        "ResourceQuotas",
+        "LimitRanges",
+        "HorizontalPodAutoscalers",
+        "PodDisruptionBudgets",
+        "PriorityClasses",
+        "RuntimeClasses",
+        "Leases",
+        "MutatingWebhookConfigurations",
+        "ValidatingWebhookConfigurations"
+      ]
+    },
+    {
+      "name": "Network",
+      "items": [
+        "Services",
+        "Endpoints",
+        "Ingresses",
+        "IngressControllers",
+        "NetworkPolicies",
+        "PortForwarding"
+      ]
+    },
+    {
+      "name": "Storage",
+      "items": [
+        "PersistentVolumeClaims",
+        "PersistentVolumes",
+        "StorageClasses"
+      ]
+    },
+    {
+      "name": "Namespaces",
+      "items": []
+    },
+    {
+      "name": "Events",
+      "items": []
+    },
+    {
+      "name": "Helm",
+      "items": [
+        "Charts",
+        "Releases"
+      ]
+    },
+    {
+      "name": "AccessControl",
+      "items": [
+        "ServiceAccounts",
+        "ClusterRoles",
+        "Roles",
+        "ClusterRoleBindings",
+        "RoleBindings"
+      ]
+    },
+    {
+      "name": "CustomResources",
+      "items": [
+        "Definitions"
+      ]
+    }
+  ]
+}
