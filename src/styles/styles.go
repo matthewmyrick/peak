@@ -26,4 +26,9 @@ var (
 		Foreground(lipgloss.Color("99")).
 		Bold(true).
 		Padding(0, 1)
+
+	SearchStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("237")).
+		Padding(0, 1)
 )

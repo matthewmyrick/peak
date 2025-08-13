@@ -48,22 +48,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-		case "up", "k":
-			m.leftPane.MoveUp()
-
-		case "down", "j":
-			m.leftPane.MoveDown()
-
-		case "enter", " ", "right", "l":
-			m.leftPane.ToggleExpand()
-			m.rightPane.SetSelectedItem(m.leftPane.SelectedItem)
-
-		case "left", "h":
-			m.leftPane.Collapse()
+		if m.leftPane.SearchMode {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			case "escape":
+				m.leftPane.ToggleSearch()
+				m.rightPane.SetSearchMode(m.leftPane.SearchMode)
+			case "enter":
+				m.leftPane.ToggleExpand()
+				m.rightPane.SetSelectedItem(m.leftPane.SelectedItem)
+			case "up", "k":
+				m.leftPane.MoveUp()
+			case "down", "j":
+				m.leftPane.MoveDown()
+			case "backspace":
+				if len(m.leftPane.SearchQuery) > 0 {
+					query := m.leftPane.SearchQuery[:len(m.leftPane.SearchQuery)-1]
+					m.leftPane.UpdateSearch(query)
+				}
+			default:
+				if len(msg.String()) == 1 {
+					query := m.leftPane.SearchQuery + msg.String()
+					m.leftPane.UpdateSearch(query)
+				}
+			}
+		} else {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			case "/":
+				m.leftPane.ToggleSearch()
+				m.rightPane.SetSearchMode(m.leftPane.SearchMode)
+			case "up", "k":
+				m.leftPane.MoveUp()
+			case "down", "j":
+				m.leftPane.MoveDown()
+			case "enter", " ", "right", "l":
+				m.leftPane.ToggleExpand()
+				m.rightPane.SetSelectedItem(m.leftPane.SelectedItem)
+			case "left", "h":
+				m.leftPane.Collapse()
+			}
 		}
 	}
 

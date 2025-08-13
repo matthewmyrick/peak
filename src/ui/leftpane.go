@@ -8,23 +8,32 @@ import (
 )
 
 type LeftPane struct {
-	NavItems      []models.NavItem
-	Cursor        int
-	Width         int
-	Height        int
-	SelectedItem  string
+	NavItems       []models.NavItem
+	Cursor         int
+	Width          int
+	Height         int
+	SelectedItem   string
+	SearchMode     bool
+	SearchQuery    string
+	FilteredItems  []models.VisibleItem
 }
 
 func NewLeftPane(width, height int) *LeftPane {
 	return &LeftPane{
-		NavItems: models.GetInitialNavItems(),
-		Cursor:   0,
-		Width:    width,
-		Height:   height,
+		NavItems:    models.GetInitialNavItems(),
+		Cursor:      0,
+		Width:       width,
+		Height:      height,
+		SearchMode:  false,
+		SearchQuery: "",
 	}
 }
 
 func (lp *LeftPane) GetVisibleItems() []models.VisibleItem {
+	if lp.SearchMode && lp.SearchQuery != "" {
+		return lp.FilteredItems
+	}
+	
 	var items []models.VisibleItem
 	for i := range lp.NavItems {
 		item := &lp.NavItems[i]
@@ -95,13 +104,25 @@ func (lp *LeftPane) Collapse() {
 
 func (lp *LeftPane) Render() string {
 	var b strings.Builder
-	b.WriteString(styles.HeaderStyle.Render("Kubernetes Resources") + "\n\n")
+	b.WriteString(styles.HeaderStyle.Render("Kubernetes Resources") + "\n")
+	
+	if lp.SearchMode {
+		searchPrefix := "Search: "
+		searchLine := searchPrefix + lp.SearchQuery + "│"
+		b.WriteString(styles.SearchStyle.Render(searchLine) + "\n\n")
+	} else {
+		b.WriteString("\n")
+	}
 
 	visibleItems := lp.GetVisibleItems()
 	startIdx := 0
 	endIdx := len(visibleItems)
 
-	maxLines := lp.Height - 6
+	maxLines := lp.Height - 7
+	if lp.SearchMode {
+		maxLines = lp.Height - 8
+	}
+	
 	if endIdx-startIdx > maxLines {
 		if lp.Cursor >= maxLines {
 			startIdx = lp.Cursor - maxLines + 1
@@ -118,11 +139,16 @@ func (lp *LeftPane) Render() string {
 		indent := strings.Repeat("  ", item.Level)
 		
 		if item.Parent == nil && len(lp.NavItems[lp.getNavItemIndex(item.Name)].Items) > 0 {
-			expanded := lp.NavItems[lp.getNavItemIndex(item.Name)].Expanded
-			if expanded {
+			if lp.SearchMode {
+				// In search mode, always show as expanded if it has children
 				line = indent + "▼ " + item.Name
 			} else {
-				line = indent + "▶ " + item.Name
+				expanded := lp.NavItems[lp.getNavItemIndex(item.Name)].Expanded
+				if expanded {
+					line = indent + "▼ " + item.Name
+				} else {
+					line = indent + "▶ " + item.Name
+				}
 			}
 		} else if item.Parent != nil {
 			line = indent + "  " + item.Name
@@ -153,4 +179,69 @@ func (lp *LeftPane) getNavItemIndex(name string) int {
 		}
 	}
 	return -1
+}
+
+func (lp *LeftPane) ToggleSearch() {
+	lp.SearchMode = !lp.SearchMode
+	if !lp.SearchMode {
+		lp.SearchQuery = ""
+		lp.FilteredItems = nil
+		lp.Cursor = 0
+	}
+}
+
+func (lp *LeftPane) UpdateSearch(query string) {
+	lp.SearchQuery = query
+	lp.FilteredItems = lp.filterItems(query)
+	lp.Cursor = 0
+}
+
+func (lp *LeftPane) filterItems(query string) []models.VisibleItem {
+	if query == "" {
+		return nil
+	}
+	
+	var filtered []models.VisibleItem
+	query = strings.ToLower(query)
+	
+	for i := range lp.NavItems {
+		item := &lp.NavItems[i]
+		parentMatches := strings.Contains(strings.ToLower(item.Name), query)
+		
+		// Check if any children match
+		hasMatchingChildren := false
+		for _, subItem := range item.Items {
+			if strings.Contains(strings.ToLower(subItem), query) {
+				hasMatchingChildren = true
+				break
+			}
+		}
+		
+		// If parent matches or has matching children, include parent
+		if parentMatches || hasMatchingChildren {
+			filtered = append(filtered, models.VisibleItem{
+				Name:     item.Name,
+				Parent:   nil,
+				IsFolder: len(item.Items) > 0,
+				Level:    0,
+			})
+			
+			// Add all children if parent has matching children or parent matches
+			if hasMatchingChildren || parentMatches {
+				for _, subItem := range item.Items {
+					// Only show children that match, or all children if parent matches
+					if parentMatches || strings.Contains(strings.ToLower(subItem), query) {
+						filtered = append(filtered, models.VisibleItem{
+							Name:     subItem,
+							Parent:   item,
+							IsFolder: false,
+							Level:    1,
+						})
+					}
+				}
+			}
+		}
+	}
+	
+	return filtered
 }

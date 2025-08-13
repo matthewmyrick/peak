@@ -10,6 +10,7 @@ type RightPane struct {
 	SelectedItem string
 	Width        int
 	Height       int
+	SearchMode   bool
 }
 
 func NewRightPane(width, height int) *RightPane {
@@ -21,6 +22,10 @@ func NewRightPane(width, height int) *RightPane {
 
 func (rp *RightPane) SetSelectedItem(item string) {
 	rp.SelectedItem = item
+}
+
+func (rp *RightPane) SetSearchMode(searchMode bool) {
+	rp.SearchMode = searchMode
 }
 
 func (rp *RightPane) Render() string {
@@ -37,7 +42,14 @@ func (rp *RightPane) Render() string {
 		b.WriteString(styles.NormalStyle.Render("  ↓/j     - Move down\n"))
 		b.WriteString(styles.NormalStyle.Render("  →/l/↵   - Expand/Select\n"))
 		b.WriteString(styles.NormalStyle.Render("  ←/h     - Collapse\n"))
+		b.WriteString(styles.NormalStyle.Render("  /       - Search\n"))
 		b.WriteString(styles.NormalStyle.Render("  q       - Quit\n"))
+		if rp.SearchMode {
+			b.WriteString(styles.NormalStyle.Render("\nSearch Mode:\n"))
+			b.WriteString(styles.NormalStyle.Render("  Type to search\n"))
+			b.WriteString(styles.NormalStyle.Render("  Esc     - Exit search\n"))
+			b.WriteString(styles.NormalStyle.Render("  Backspace - Delete character\n"))
+		}
 	}
 	
 	return b.String()
