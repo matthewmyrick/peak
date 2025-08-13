@@ -13,6 +13,14 @@
       "items": []
     },
     {
+      "name": "Namespaces",
+      "items": []
+    },
+    {
+      "name": "Events",
+      "items": []
+    },
+    {
       "name": "Workloads",
       "items": [
         "Overview",
@@ -61,21 +69,7 @@
         "StorageClasses"
       ]
     },
-    {
-      "name": "Namespaces",
-      "items": []
-    },
-    {
-      "name": "Events",
-      "items": []
-    },
-    {
-      "name": "Helm",
-      "items": [
-        "Charts",
-        "Releases"
-      ]
-    },
+
     {
       "name": "AccessControl",
       "items": [
@@ -84,6 +78,13 @@
         "Roles",
         "ClusterRoleBindings",
         "RoleBindings"
+      ]
+    },
+    {
+      "name": "Helm",
+      "items": [
+        "Charts",
+        "Releases"
       ]
     },
     {
