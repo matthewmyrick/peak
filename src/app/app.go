@@ -49,20 +49,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.leftPane.SearchMode {
-			switch msg.String() {
-			case "ctrl+c", "q":
+			switch {
+			case msg.String() == "ctrl+c" || msg.String() == "q":
 				return m, tea.Quit
-			case "escape":
+			case msg.Type == tea.KeyEscape:
 				m.leftPane.ToggleSearch()
 				m.rightPane.SetSearchMode(m.leftPane.SearchMode)
-			case "enter":
+			case msg.String() == "enter":
 				m.leftPane.ToggleExpand()
 				m.rightPane.SetSelectedItem(m.leftPane.SelectedItem)
-			case "up", "k":
+				// Exit search mode when selecting a resource item
+				if m.leftPane.SelectedItem != "" {
+					m.leftPane.ToggleSearch()
+					m.rightPane.SetSearchMode(m.leftPane.SearchMode)
+				}
+			case msg.String() == "up" || msg.String() == "k":
 				m.leftPane.MoveUp()
-			case "down", "j":
+			case msg.String() == "down" || msg.String() == "j":
 				m.leftPane.MoveDown()
-			case "backspace":
+			case msg.Type == tea.KeyBackspace:
 				if len(m.leftPane.SearchQuery) > 0 {
 					query := m.leftPane.SearchQuery[:len(m.leftPane.SearchQuery)-1]
 					m.leftPane.UpdateSearch(query)
