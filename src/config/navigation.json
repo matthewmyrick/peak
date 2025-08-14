@@ -19,7 +19,6 @@
     {
       "name": "Workloads",
       "items": [
-        "Overview",
         "Pods",
         "Deployments",
         "DaemonSets",

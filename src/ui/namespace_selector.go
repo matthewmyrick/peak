@@ -28,13 +28,17 @@ func NewNamespaceSelector(namespaces []string, currentNamespace string) *Namespa
 		}
 	}
 
+	// Add "All namespaces" option at the beginning
+	namespacesWithAll := []string{"All namespaces"}
+	namespacesWithAll = append(namespacesWithAll, namespaces...)
+
 	if currentNamespace == "" {
 		currentNamespace = "default"
 	}
 
 	return &NamespaceSelector{
-		namespaces:         namespaces,
-		filteredNamespaces: namespaces,
+		namespaces:         namespacesWithAll,
+		filteredNamespaces: namespacesWithAll,
 		cursor:             0,
 		SearchQuery:        "",
 		isOpen:             false,
@@ -45,8 +49,12 @@ func NewNamespaceSelector(namespaces []string, currentNamespace string) *Namespa
 }
 
 func (ns *NamespaceSelector) UpdateNamespaces(namespaces []string, currentNamespace string) {
-	ns.namespaces = namespaces
-	ns.filteredNamespaces = namespaces
+	// Add "All namespaces" option at the beginning
+	namespacesWithAll := []string{"All namespaces"}
+	namespacesWithAll = append(namespacesWithAll, namespaces...)
+	
+	ns.namespaces = namespacesWithAll
+	ns.filteredNamespaces = namespacesWithAll
 	ns.selectedNamespace = currentNamespace
 	ns.cursor = 0
 	ns.SearchQuery = ""
@@ -70,6 +78,14 @@ func (ns *NamespaceSelector) IsOpen() bool {
 }
 
 func (ns *NamespaceSelector) GetSelectedNamespace() string {
+	if ns.selectedNamespace == "" {
+		return "All namespaces"
+	}
+	return ns.selectedNamespace
+}
+
+func (ns *NamespaceSelector) GetSelectedNamespaceRaw() string {
+	// Returns empty string for "All namespaces", actual namespace otherwise
 	return ns.selectedNamespace
 }
 
@@ -87,7 +103,12 @@ func (ns *NamespaceSelector) MoveDown() {
 
 func (ns *NamespaceSelector) Select() {
 	if ns.cursor < len(ns.filteredNamespaces) {
-		ns.selectedNamespace = ns.filteredNamespaces[ns.cursor]
+		selectedOption := ns.filteredNamespaces[ns.cursor]
+		if selectedOption == "All namespaces" {
+			ns.selectedNamespace = "" // Empty string means all namespaces
+		} else {
+			ns.selectedNamespace = selectedOption
+		}
 		ns.Close()
 	}
 }

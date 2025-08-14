@@ -21,23 +21,27 @@ const (
 )
 
 type Model struct {
-	leftPane          *ui.LeftPane
-	rightPane         *ui.RightPane
-	footer            *ui.Footer
-	namespaceSelector *ui.NamespaceSelector
-	contextSelector   *ui.ContextSelector
-	notifications     *ui.NotificationManager
-	kubeConfig        *k8s.KubeConfig
-	loadingSpinner    *ui.LoadingSpinner
+	leftPane           *ui.LeftPane
+	rightPane          *ui.RightPane
+	footer             *ui.Footer
+	namespaceSelector  *ui.NamespaceSelector
+	contextSelector    *ui.ContextSelector
+	notifications      *ui.NotificationManager
+	kubeConfig         *k8s.KubeConfig
+	loadingSpinner     *ui.LoadingSpinner
 	timeframeInputPane *ui.TimeframeInput
-	width             int
-	height            int
-	leftPaneWidth     int
-	rightPaneWidth    int
-	isLoading         bool
-	isConnected       bool
-	initError         error
-	focusedPane       FocusedPane
+	logsViewer         *ui.LogsViewer
+	confirmationDialog *ui.ConfirmationDialog
+	yamlViewer         *ui.YAMLViewer
+	execTerminal       *ui.ExecTerminal
+	width              int
+	height             int
+	leftPaneWidth      int
+	rightPaneWidth     int
+	isLoading          bool
+	isConnected        bool
+	initError          error
+	focusedPane        FocusedPane
 }
 
 func InitialModel() Model {
@@ -48,6 +52,10 @@ func InitialModel() Model {
 	notifications := ui.NewNotificationManager()
 	loadingSpinner := ui.NewLoadingSpinner("Connecting to Kubernetes cluster...")
 	timeframeInputPane := ui.NewTimeframeInput()
+	logsViewer := ui.NewLogsViewer()
+	confirmationDialog := ui.NewConfirmationDialog()
+	yamlViewer := ui.NewYAMLViewer()
+	execTerminal := ui.NewExecTerminal()
 
 	// Connect notifications to right pane
 	rightPane.SetNotifications(notifications)
@@ -59,6 +67,10 @@ func InitialModel() Model {
 		notifications:      notifications,
 		loadingSpinner:     loadingSpinner,
 		timeframeInputPane: timeframeInputPane,
+		logsViewer:         logsViewer,
+		confirmationDialog: confirmationDialog,
+		yamlViewer:         yamlViewer,
+		execTerminal:       execTerminal,
 		leftPaneWidth:      leftPaneWidth,
 		width:              80,
 		height:             24,
@@ -223,6 +235,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.contextSelector.UpdateSpinner()
 		}
 
+		// Update applications if applications view is selected and we're connected
+		if m.isConnected && m.rightPane != nil &&
+			strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "applications") {
+			m.rightPane.UpdateApplications()
+		}
+
+		// Update pods if pods view is selected and we're connected
+		if m.isConnected && m.rightPane != nil &&
+			strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+			m.rightPane.UpdatePods()
+		}
+
 		// Update nodes if nodes view is selected and we're connected
 		if m.isConnected && m.rightPane != nil &&
 			strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "nodes") {
@@ -307,7 +331,92 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Handle timeframe input if it's open (highest priority after context selector)
+		// Handle confirmation dialog if it's open (highest priority after context selector)
+		if m.confirmationDialog != nil && m.confirmationDialog.IsOpen() {
+			switch {
+			case msg.Type == tea.KeyEscape:
+				m.confirmationDialog.Close()
+			case msg.String() == "enter":
+				confirmed := m.confirmationDialog.Confirm()
+				if confirmed {
+					// Execute the action
+					if selectedPod := m.rightPane.GetSelectedPod(); selectedPod != nil {
+						action := m.confirmationDialog.GetAction()
+						if action == "delete" {
+							err := m.kubeConfig.DeletePod(m.kubeConfig.CurrentContext, selectedPod.Namespace, selectedPod.Name)
+							if err != nil && m.notifications != nil {
+								m.notifications.AddError("Delete Failed", err.Error())
+							} else if m.notifications != nil {
+								m.notifications.AddSuccess("Pod Deleted", fmt.Sprintf("Pod %s deleted successfully", selectedPod.Name))
+								// Refresh pods list
+								m.rightPane.UpdatePods()
+							}
+						} else if action == "restart" {
+							err := m.kubeConfig.RestartPod(m.kubeConfig.CurrentContext, selectedPod.Namespace, selectedPod.Name)
+							if err != nil && m.notifications != nil {
+								m.notifications.AddError("Restart Failed", err.Error())
+							} else if m.notifications != nil {
+								m.notifications.AddSuccess("Pod Restarted", fmt.Sprintf("Pod %s restarted successfully", selectedPod.Name))
+								// Refresh pods list
+								m.rightPane.UpdatePods()
+							}
+						}
+					}
+				}
+			case msg.String() == "left":
+				m.confirmationDialog.MoveLeft()
+			case msg.String() == "right":
+				m.confirmationDialog.MoveRight()
+			}
+			return m, nil
+		}
+
+		// Handle logs viewer if it's open
+		if m.logsViewer != nil && m.logsViewer.IsOpen() {
+			switch {
+			case msg.Type == tea.KeyEscape:
+				m.logsViewer.Close()
+			case msg.String() == "up":
+				m.logsViewer.ScrollUp()
+			case msg.String() == "down":
+				m.logsViewer.ScrollDown()
+			case msg.String() == "pgup":
+				m.logsViewer.PageUp()
+			case msg.String() == "pgdn":
+				m.logsViewer.PageDown()
+			case msg.String() == "f":
+				m.logsViewer.ToggleFollow()
+			}
+			return m, nil
+		}
+
+		// Handle YAML viewer if it's open
+		if m.yamlViewer != nil && m.yamlViewer.IsOpen() {
+			switch {
+			case msg.Type == tea.KeyEscape:
+				m.yamlViewer.Close()
+			case msg.String() == "up":
+				m.yamlViewer.ScrollUp()
+			case msg.String() == "down":
+				m.yamlViewer.ScrollDown()
+			case msg.String() == "pgup":
+				m.yamlViewer.PageUp()
+			case msg.String() == "pgdn":
+				m.yamlViewer.PageDown()
+			}
+			return m, nil
+		}
+
+		// Handle exec terminal if it's open
+		if m.execTerminal != nil && m.execTerminal.IsOpen() {
+			switch {
+			case msg.Type == tea.KeyEscape:
+				m.execTerminal.Close()
+			}
+			return m, nil
+		}
+
+		// Handle timeframe input if it's open
 		if m.timeframeInputPane != nil && m.timeframeInputPane.IsOpen() {
 			switch {
 			case msg.Type == tea.KeyEscape:
@@ -347,6 +456,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newNamespace := m.namespaceSelector.GetSelectedNamespace()
 				if newNamespace != previousNamespace && m.notifications != nil {
 					m.notifications.AddInfo("Namespace changed", fmt.Sprintf("Now using namespace: %s", newNamespace))
+				}
+				// Update right pane tables with new namespace
+				if m.rightPane != nil {
+					m.rightPane.SetNamespace(m.namespaceSelector.GetSelectedNamespaceRaw())
 				}
 			case msg.String() == "up":
 				m.namespaceSelector.MoveUp()
@@ -418,14 +531,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.focusedPane == FocusLeftPane {
 					m.leftPane.ToggleSearch()
 					m.rightPane.SetSearchMode(m.leftPane.SearchMode)
+				} else if m.focusedPane == FocusRightPane && strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					m.rightPane.TogglePodsSearch()
 				}
 			case "up":
 				if m.focusedPane == FocusLeftPane {
 					m.leftPane.MoveUp()
+				} else if m.focusedPane == FocusRightPane && strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					m.rightPane.MovePodsUp()
 				}
 			case "down":
 				if m.focusedPane == FocusLeftPane {
 					m.leftPane.MoveDown()
+				} else if m.focusedPane == FocusRightPane && strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					m.rightPane.MovePodsDown()
+				}
+			case "l":
+				// Handle logs command for pods view
+				if m.focusedPane == FocusRightPane && m.rightPane != nil &&
+					strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					if selectedPod := m.rightPane.GetSelectedPod(); selectedPod != nil {
+						containerName := ""
+						if len(selectedPod.Containers) > 0 {
+							containerName = selectedPod.Containers[0].Name
+						}
+						m.logsViewer.Open(m.kubeConfig, m.kubeConfig.CurrentContext, selectedPod.Namespace, selectedPod.Name, containerName)
+					}
+				}
+			case "e":
+				// Handle exec command for pods view
+				if m.focusedPane == FocusRightPane && m.rightPane != nil &&
+					strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					if selectedPod := m.rightPane.GetSelectedPod(); selectedPod != nil {
+						m.execTerminal.Open(m.kubeConfig.CurrentContext, selectedPod.Namespace, selectedPod.Name)
+					}
+				}
+			case "d":
+				// Handle delete command for pods view
+				if m.focusedPane == FocusRightPane && m.rightPane != nil &&
+					strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					if selectedPod := m.rightPane.GetSelectedPod(); selectedPod != nil {
+						m.confirmationDialog.Open("delete", selectedPod.Name, selectedPod.Namespace)
+					}
+				}
+			case "r":
+				// Handle restart command for pods view
+				if m.focusedPane == FocusRightPane && m.rightPane != nil &&
+					strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					if selectedPod := m.rightPane.GetSelectedPod(); selectedPod != nil {
+						m.confirmationDialog.Open("restart", selectedPod.Name, selectedPod.Namespace)
+					}
+				}
+			case "y":
+				// Handle YAML view command for pods view
+				if m.focusedPane == FocusRightPane && m.rightPane != nil &&
+					strings.Contains(strings.ToLower(m.leftPane.SelectedItem), "pods") {
+					if selectedPod := m.rightPane.GetSelectedPod(); selectedPod != nil {
+						m.yamlViewer.Open(m.kubeConfig, m.kubeConfig.CurrentContext, selectedPod.Namespace, selectedPod.Name)
+					}
 				}
 			case "t":
 				// Handle timeframe adjustment for events view
@@ -622,13 +785,31 @@ func (m Model) View() string {
 		)
 	}
 
-	// Check if timeframe input is open (highest priority overlay)
+	// Check for floating panes (highest priority overlays)
+	if m.confirmationDialog != nil && m.confirmationDialog.IsOpen() {
+		confirmationOverlay := m.confirmationDialog.Render(m.width, m.height)
+		return m.renderWithOverlay(fullUI, confirmationOverlay)
+	}
+
+	if m.logsViewer != nil && m.logsViewer.IsOpen() {
+		logsOverlay := m.logsViewer.Render(m.width, m.height)
+		return m.renderWithOverlay(fullUI, logsOverlay)
+	}
+
+	if m.yamlViewer != nil && m.yamlViewer.IsOpen() {
+		yamlOverlay := m.yamlViewer.Render(m.width, m.height)
+		return m.renderWithOverlay(fullUI, yamlOverlay)
+	}
+
+	if m.execTerminal != nil && m.execTerminal.IsOpen() {
+		execOverlay := m.execTerminal.Render(m.width, m.height)
+		return m.renderWithOverlay(fullUI, execOverlay)
+	}
+
 	if m.timeframeInputPane != nil && m.timeframeInputPane.IsOpen() {
 		// Render the timeframe input as an overlay over the main UI
 		timeframeOverlay := m.timeframeInputPane.Render(m.width, m.height)
-		
-		// Combine main UI with timeframe input overlay
-		return m.renderWithTimeframeInput(fullUI, timeframeOverlay)
+		return m.renderWithOverlay(fullUI, timeframeOverlay)
 	}
 
 	// Check if we have notifications to overlay
@@ -795,11 +976,11 @@ func (m Model) formatTimeAgo(t time.Time) string {
 	return fmt.Sprintf("%dh ago", hours)
 }
 
-func (m Model) renderWithTimeframeInput(mainUI, timeframeOverlay string) string {
-	// The timeframe input overlay is already positioned with lipgloss.Place
+func (m Model) renderWithOverlay(mainUI, overlay string) string {
+	// The overlay is already positioned with lipgloss.Place
 	// We need to combine it with the main UI background
 	mainUILines := strings.Split(mainUI, "\n")
-	overlayLines := strings.Split(timeframeOverlay, "\n")
+	overlayLines := strings.Split(overlay, "\n")
 	
 	// Create a result that preserves the main UI background with the overlay on top
 	maxLines := len(mainUILines)

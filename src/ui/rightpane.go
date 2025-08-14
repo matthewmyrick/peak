@@ -12,16 +12,18 @@ import (
 )
 
 type RightPane struct {
-	SelectedItem  string
-	Width         int
-	Height        int
-	SearchMode    bool
-	Notifications *NotificationManager
-	KubeConfig    *k8s.KubeConfig
-	metrics       *k8s.ClusterMetrics
-	lastUpdate    time.Time
-	nodesTable    *NodesTable
-	eventsTable   *EventsTable
+	SelectedItem      string
+	Width             int
+	Height            int
+	SearchMode        bool
+	Notifications     *NotificationManager
+	KubeConfig        *k8s.KubeConfig
+	metrics           *k8s.ClusterMetrics
+	lastUpdate        time.Time
+	nodesTable        *NodesTable
+	eventsTable       *EventsTable
+	applicationsTable *ApplicationsTable
+	podsTable         *PodsTable
 }
 
 func NewRightPane(width, height int) *RightPane {
@@ -45,10 +47,15 @@ func (rp *RightPane) SetNotifications(nm *NotificationManager) {
 
 func (rp *RightPane) SetKubeConfig(kc *k8s.KubeConfig) {
 	rp.KubeConfig = kc
-	// Initialize nodes table and events table with current context if available
+	// Initialize tables with current context if available
 	if kc != nil {
+		// Get the current namespace from kubeconfig
+		currentNamespace := kc.GetCurrentNamespace()
+		
 		rp.nodesTable = NewNodesTable(kc, kc.CurrentContext)
 		rp.eventsTable = NewEventsTable(kc, kc.CurrentContext)
+		rp.applicationsTable = NewApplicationsTable(kc, kc.CurrentContext, currentNamespace)
+		rp.podsTable = NewPodsTable(kc, kc.CurrentContext, currentNamespace)
 	}
 }
 
@@ -62,6 +69,14 @@ func (rp *RightPane) Render() string {
 		if strings.Contains(strings.ToLower(rp.SelectedItem), "overview") {
 			overviewContent := rp.renderOverview()
 			b.WriteString(overviewContent)
+		} else if strings.Contains(strings.ToLower(rp.SelectedItem), "applications") {
+			// Handle applications view
+			applicationsContent := rp.renderApplications()
+			b.WriteString(applicationsContent)
+		} else if strings.Contains(strings.ToLower(rp.SelectedItem), "pods") {
+			// Handle pods view
+			podsContent := rp.renderPods()
+			b.WriteString(podsContent)
 		} else if strings.Contains(strings.ToLower(rp.SelectedItem), "nodes") {
 			// Handle nodes view
 			nodesContent := rp.renderNodes()
@@ -447,6 +462,127 @@ func (rp *RightPane) UpdateEvents() {
 
 func (rp *RightPane) GetEventsTable() *EventsTable {
 	return rp.eventsTable
+}
+
+func (rp *RightPane) renderApplications() string {
+	if rp.applicationsTable == nil {
+		if rp.KubeConfig != nil {
+			rp.applicationsTable = NewApplicationsTable(rp.KubeConfig, rp.KubeConfig.CurrentContext, "")
+			// Trigger initial load immediately for first time
+			go func() {
+				rp.applicationsTable.Update()
+			}()
+		} else {
+			return styles.NormalStyle.Render("Kubernetes configuration not available")
+		}
+	}
+
+	// Update applications if needed (background updates)
+	if rp.applicationsTable.ShouldUpdate() {
+		go func() {
+			rp.applicationsTable.Update()
+		}()
+	}
+
+	return rp.applicationsTable.Render()
+}
+
+func (rp *RightPane) UpdateApplications() {
+	if rp.applicationsTable != nil {
+		go func() {
+			rp.applicationsTable.Update()
+		}()
+	}
+}
+
+func (rp *RightPane) GetApplicationsTable() *ApplicationsTable {
+	return rp.applicationsTable
+}
+
+func (rp *RightPane) SetNamespace(namespace string) {
+	// Update all tables with the new namespace
+	if rp.applicationsTable != nil {
+		rp.applicationsTable.SetNamespace(namespace)
+	}
+	if rp.podsTable != nil {
+		rp.podsTable.SetNamespace(namespace)
+	}
+	// Add other tables as needed in the future
+}
+
+func (rp *RightPane) renderPods() string {
+	if rp.podsTable == nil {
+		if rp.KubeConfig != nil {
+			// Initialize with empty namespace (will be set by namespace selector)
+			rp.podsTable = NewPodsTable(rp.KubeConfig, rp.KubeConfig.CurrentContext, "")
+			// Trigger initial load immediately for first time
+			go func() {
+				rp.podsTable.Update()
+			}()
+		} else {
+			return styles.NormalStyle.Render("Kubernetes configuration not available")
+		}
+	}
+
+	// Update pods if needed (background updates)
+	if rp.podsTable.ShouldUpdate() {
+		go func() {
+			rp.podsTable.Update()
+		}()
+	}
+
+	return rp.podsTable.Render()
+}
+
+func (rp *RightPane) UpdatePods() {
+	if rp.podsTable != nil {
+		go func() {
+			rp.podsTable.Update()
+		}()
+	}
+}
+
+func (rp *RightPane) GetPodsTable() *PodsTable {
+	return rp.podsTable
+}
+
+// Pods-specific methods for keyboard handling
+func (rp *RightPane) IsPodsSearchMode() bool {
+	if rp.podsTable != nil {
+		return rp.podsTable.IsSearchMode()
+	}
+	return false
+}
+
+func (rp *RightPane) TogglePodsSearch() {
+	if rp.podsTable != nil {
+		rp.podsTable.ToggleSearchMode()
+	}
+}
+
+func (rp *RightPane) UpdatePodsSearch(query string) {
+	if rp.podsTable != nil {
+		rp.podsTable.UpdateSearch(query)
+	}
+}
+
+func (rp *RightPane) MovePodsUp() {
+	if rp.podsTable != nil {
+		rp.podsTable.MoveUp()
+	}
+}
+
+func (rp *RightPane) MovePodsDown() {
+	if rp.podsTable != nil {
+		rp.podsTable.MoveDown()
+	}
+}
+
+func (rp *RightPane) GetSelectedPod() *k8s.PodInfo {
+	if rp.podsTable != nil {
+		return rp.podsTable.GetSelectedPod()
+	}
+	return nil
 }
 
 func (rp *RightPane) formatTimeAgo(t time.Time) string {
