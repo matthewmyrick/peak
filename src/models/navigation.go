@@ -35,7 +35,9 @@ func GetInitialNavItems() []NavItem {
 	
 	// Fallback to hardcoded values
 	return []NavItem{
-		{Name: "Overview", Items: []string{}, Expanded: false, Level: 0},
+		{Name: "Overview", Items: []string{
+			"Cluster Info", "Namespaces", "Resource Usage", "Events",
+		}, Expanded: true, Level: 0},
 		{Name: "Applications", Items: []string{}, Expanded: false, Level: 0},
 		{Name: "Nodes", Items: []string{}, Expanded: false, Level: 0},
 		{Name: "Workloads", Items: []string{
