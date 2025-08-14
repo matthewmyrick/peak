@@ -7,15 +7,19 @@ import (
 )
 
 type ContextSelector struct {
-	contexts          []string
-	filteredContexts  []string
-	cursor            int
-	SearchQuery       string
-	isOpen            bool
-	selectedContext   string
-	originalContext   string
-	width             int
-	height            int
+	contexts         []string
+	filteredContexts []string
+	cursor           int
+	SearchQuery      string
+	isOpen           bool
+	selectedContext  string
+	originalContext  string
+	width            int
+	height           int
+	isConnecting     bool
+	connectionError  string
+	spinnerFrame     int
+	spinnerFrames    []string
 }
 
 func NewContextSelector(contexts []string, currentContext string) *ContextSelector {
@@ -31,13 +35,17 @@ func NewContextSelector(contexts []string, currentContext string) *ContextSelect
 	return &ContextSelector{
 		contexts:         contexts,
 		filteredContexts: contexts,
-		cursor:          cursorPos,
-		SearchQuery:     "",
-		isOpen:          true, // Start open on app launch
-		selectedContext: currentContext,
-		originalContext: currentContext,
-		width:           60,
-		height:          20,
+		cursor:           cursorPos,
+		SearchQuery:      "",
+		isOpen:           true, // Start open on app launch
+		selectedContext:  currentContext,
+		originalContext:  currentContext,
+		width:            60,
+		height:           20,
+		isConnecting:     false,
+		connectionError:  "",
+		spinnerFrame:     0,
+		spinnerFrames:    []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 	}
 }
 
@@ -45,6 +53,8 @@ func (cs *ContextSelector) Open() {
 	cs.isOpen = true
 	cs.SearchQuery = ""
 	cs.filteredContexts = cs.contexts
+	cs.isConnecting = false // Clear any connecting state
+	cs.connectionError = "" // Clear any error state
 	// Set cursor to current context
 	for i, ctx := range cs.filteredContexts {
 		if ctx == cs.selectedContext {
@@ -83,8 +93,34 @@ func (cs *ContextSelector) MoveDown() {
 func (cs *ContextSelector) Select() {
 	if cs.cursor < len(cs.filteredContexts) {
 		cs.selectedContext = cs.filteredContexts[cs.cursor]
-		cs.Close()
+		// Don't close immediately - wait for connection validation
 	}
+}
+
+func (cs *ContextSelector) SetConnecting(connecting bool) {
+	cs.isConnecting = connecting
+	if connecting {
+		cs.connectionError = ""
+	}
+}
+
+func (cs *ContextSelector) SetConnectionError(err string) {
+	cs.connectionError = err
+	cs.isConnecting = false
+}
+
+func (cs *ContextSelector) ClearError() {
+	cs.connectionError = ""
+}
+
+func (cs *ContextSelector) UpdateSpinner() {
+	if cs.isConnecting {
+		cs.spinnerFrame = (cs.spinnerFrame + 1) % len(cs.spinnerFrames)
+	}
+}
+
+func (cs *ContextSelector) IsConnecting() bool {
+	return cs.isConnecting
 }
 
 func (cs *ContextSelector) UpdateSearch(query string) {
@@ -226,24 +262,49 @@ func (cs *ContextSelector) Render(screenWidth, screenHeight int) string {
 		contextList.WriteString(itemStyle.Render("  No matching contexts"))
 	}
 
+	// Show loading or error state if applicable
+	var statusMessage string
+	if cs.isConnecting {
+		loadingStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("39")).
+			Bold(true)
+		spinner := cs.spinnerFrames[cs.spinnerFrame]
+		statusMessage = loadingStyle.Render(spinner + " Connecting to cluster...")
+	} else if cs.connectionError != "" {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true).
+			Width(cs.width - 4)
+		statusMessage = errorStyle.Render("✗ " + cs.connectionError)
+	}
+
 	// Instructions
 	instructionStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
 		MarginTop(1)
 
-	instructions := instructionStyle.Render("↑/↓ Navigate • Enter Select • Esc Cancel")
+	var instructions string
+	if cs.isConnecting {
+		instructions = instructionStyle.Render("Please wait...")
+	} else if cs.connectionError != "" {
+		instructions = instructionStyle.Render("↑/↓ Navigate • Enter Retry • Ctrl+Q Quit")
+	} else {
+		instructions = instructionStyle.Render("↑/↓ Navigate • Enter Select • Ctrl+Q Quit")
+	}
 
 	// Combine all elements
+	var elements []string
+	elements = append(elements, title, subtitle, "", searchBox, "", contextList.String())
+
+	if statusMessage != "" {
+		elements = append(elements, "", statusMessage)
+	}
+
+	elements = append(elements, "", instructions)
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		title,
-		subtitle,
-		"",
-		searchBox,
-		"",
-		contextList.String(),
-		"",
-		instructions,
+		elements...,
 	)
 
 	modalContent := modalStyle.Render(content)

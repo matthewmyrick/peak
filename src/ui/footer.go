@@ -23,6 +23,8 @@ func NewFooter(width int) *Footer {
 
 func (f *Footer) GetNavigationCommands() []Command {
 	return []Command{
+		{"1", "Left Pane"},
+		{"2", "Right Pane"},
 		{"↑", "Up"},
 		{"↓", "Down"},
 		{"↵", "Select/Expand"},
@@ -60,19 +62,19 @@ func (f *Footer) GetNamespaceSelectorCommands() []Command {
 
 func (f *Footer) Render(isSearchMode bool) string {
 	var commands []Command
-	
+
 	if isSearchMode {
 		commands = f.GetSearchCommands()
 	} else {
 		commands = f.GetNavigationCommands()
 	}
-	
+
 	return f.renderCommands(commands)
 }
 
 func (f *Footer) RenderWithMode(isSearchMode bool, isNamespaceMode bool) string {
 	var commands []Command
-	
+
 	if isNamespaceMode {
 		commands = f.GetNamespaceSelectorCommands()
 	} else if isSearchMode {
@@ -80,34 +82,34 @@ func (f *Footer) RenderWithMode(isSearchMode bool, isNamespaceMode bool) string 
 	} else {
 		commands = f.GetNavigationCommands()
 	}
-	
+
 	return f.renderCommands(commands)
 }
 
 func (f *Footer) renderCommands(commands []Command) string {
 	var commandStrings []string
-	
+
 	for _, cmd := range commands {
 		keyStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("229")).
 			Background(lipgloss.Color("240")).
 			Padding(0, 1).
 			Bold(true)
-		
+
 		descStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("252"))
-		
+
 		commandStr := keyStyle.Render(cmd.Key) + " " + descStyle.Render(cmd.Description)
 		commandStrings = append(commandStrings, commandStr)
 	}
-	
+
 	content := strings.Join(commandStrings, "  ")
-	
+
 	footerStyle := lipgloss.NewStyle().
 		Width(f.Width).
 		Padding(0, 1).
 		Background(lipgloss.Color("235")).
 		Foreground(lipgloss.Color("252"))
-	
+
 	return footerStyle.Render(content)
 }

@@ -32,7 +32,7 @@ func GetInitialNavItems() []NavItem {
 	if items := loadFromJSON(); items != nil {
 		return items
 	}
-	
+
 	// Fallback to hardcoded values
 	return []NavItem{
 		{Name: "Overview", Items: []string{
@@ -52,12 +52,12 @@ func loadFromJSON() []NavItem {
 	if err != nil {
 		return nil
 	}
-	
+
 	var config NavigationConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil
 	}
-	
+
 	var items []NavItem
 	for _, item := range config.Navigation {
 		items = append(items, NavItem{
@@ -67,6 +67,6 @@ func loadFromJSON() []NavItem {
 			Level:    0,
 		})
 	}
-	
+
 	return items
 }

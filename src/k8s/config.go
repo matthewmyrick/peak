@@ -13,16 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-type KubeConfig struct {
-	CurrentContext string
-	Contexts       []string
-	config         *api.Config
-	clientConfig   clientcmd.ClientConfig
-}
-
+// NewKubeConfig creates a new KubeConfig instance by loading the kubeconfig file
 func NewKubeConfig() (*KubeConfig, error) {
 	// Get kubeconfig path
 	kubeconfig := os.Getenv("KUBECONFIG")
@@ -63,6 +56,7 @@ func NewKubeConfig() (*KubeConfig, error) {
 	}, nil
 }
 
+// SwitchContext switches the current Kubernetes context
 func (k *KubeConfig) SwitchContext(contextName string) error {
 	// Update the current context in memory
 	k.config.CurrentContext = contextName
@@ -79,6 +73,7 @@ func (k *KubeConfig) SwitchContext(contextName string) error {
 	return nil
 }
 
+// GetNamespaces retrieves all namespaces from the specified context
 func (k *KubeConfig) GetNamespaces(contextName string) ([]string, error) {
 	// Create a temporary client config for the specified context
 	tempConfig := clientcmd.NewNonInteractiveClientConfig(
@@ -110,10 +105,10 @@ func (k *KubeConfig) GetNamespaces(contextName string) ([]string, error) {
 	if err != nil {
 		// Categorize the error for better user feedback
 		errorType := categorizeError(err)
-		
+
 		// Return default namespaces with wrapped error
 		defaultNamespaces := []string{"default", "kube-system", "kube-public", "kube-node-lease"}
-		
+
 		switch errorType {
 		case ErrorTimeout:
 			return defaultNamespaces, fmt.Errorf("connection timeout to cluster '%s': %w", contextName, err)
@@ -135,22 +130,23 @@ func (k *KubeConfig) GetNamespaces(contextName string) ([]string, error) {
 	return namespaces, nil
 }
 
-type ErrorType int
+// GetCurrentNamespace returns the current namespace for the active context
+func (k *KubeConfig) GetCurrentNamespace() string {
+	namespace, _, err := k.clientConfig.Namespace()
+	if err != nil || namespace == "" {
+		return "default"
+	}
+	return namespace
+}
 
-const (
-	ErrorUnknown ErrorType = iota
-	ErrorTimeout
-	ErrorUnauthorized
-	ErrorNetwork
-)
-
+// categorizeError categorizes Kubernetes API errors for better user feedback
 func categorizeError(err error) ErrorType {
 	if err == nil {
 		return ErrorUnknown
 	}
 
 	errStr := err.Error()
-	
+
 	// Check for timeout errors
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return ErrorTimeout
@@ -158,26 +154,18 @@ func categorizeError(err error) ErrorType {
 	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
 		return ErrorTimeout
 	}
-	
+
 	// Check for authentication errors
-	if strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "401") || 
-	   strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "403") {
+	if strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "401") ||
+		strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "403") {
 		return ErrorUnauthorized
 	}
-	
+
 	// Check for network errors
 	if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "no such host") ||
-	   strings.Contains(errStr, "network is unreachable") || strings.Contains(errStr, "no route to host") {
+		strings.Contains(errStr, "network is unreachable") || strings.Contains(errStr, "no route to host") {
 		return ErrorNetwork
 	}
-	
-	return ErrorUnknown
-}
 
-func (k *KubeConfig) GetCurrentNamespace() string {
-	namespace, _, err := k.clientConfig.Namespace()
-	if err != nil || namespace == "" {
-		return "default"
-	}
-	return namespace
+	return ErrorUnknown
 }
